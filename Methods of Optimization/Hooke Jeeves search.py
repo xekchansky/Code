@@ -10,9 +10,7 @@ def Hooke_Jeeves(f, x0, tol, coef):
     al = 2
     lam = 1
     x0 = x0.astype(np.float)
-    # Your Code
     while delta[0] > tol:
-        #print(x0)
         f_x0 = f(x0, coef)
         y_min = x0
         f_y_min = f_x0

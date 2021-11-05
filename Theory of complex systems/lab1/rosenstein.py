@@ -2,6 +2,9 @@ import numpy as np
 from numpy import linalg as LA
 import sys
 
+from scipy.spatial import cKDTree as KDTree
+from scipy.spatial import distance
+
 def make_z_vectors(time_series, m):
     '''
     Input:
@@ -16,7 +19,8 @@ def make_z_vectors(time_series, m):
         z_vectors.append(time_series[i:i+m])
     return np.asarray(z_vectors)
 
-def closest_neighbour(z_vectors, i):
+
+#def closest_neighbour(z_vectors, i):
     '''
     Input:
         z_vectors - 2d array of size n x (n-m+1)
@@ -26,6 +30,7 @@ def closest_neighbour(z_vectors, i):
         z-vector - 1d array of size n-m+1
     Description:
         Returns closest neighbour
+    '''
     '''
     target_z_vector = z_vectors[i]
     start_id = 0
@@ -42,8 +47,9 @@ def closest_neighbour(z_vectors, i):
             neighbour = z_vector
             min_index = index
     return min_index, neighbour, min_norm
+    '''
 
-def find_neighbours(z_vectors, num_neighbours=1):
+#def find_neighbours(z_vectors, num_neighbours=1):
     '''
     Input:
         z_vectors - 2d array of size n x (n-m+1)
@@ -53,6 +59,7 @@ def find_neighbours(z_vectors, num_neighbours=1):
         norms - 1d array of size n
     Description:
         Returns array of indexes of closest neighbours and array of norms||z_j - z_j*||
+    '''
     '''
     if num_neighbours > 1:
         return -1 #not implemented
@@ -68,8 +75,51 @@ def find_neighbours(z_vectors, num_neighbours=1):
         sys.stdout.write('\r' + str(float(index + 1)/len(z_vectors) // 0.01) + '%')
     print()
     return np.asarray(neighbours_ids), np.asarray(norms)
+    '''
 
-def make_lapunov_estimation(z_vectors, k=1):
+def find_neighbours(z_vectors, num_neighbours=1):
+    '''
+    Find indexes of nearest neighbours and distances to them
+    Input:
+        z_vectors : ndarray
+            z_vectors of time series.
+        num_neighbours : int
+            number of neighbours to find.
+    Output:
+        neighbours_ids : ndarray
+            Ids of nearest neighbours.
+        dists : ndarray
+            distances to nearest neighbours.
+    '''
+    tree = KDTree(z_vectors)
+    n = len(z_vectors)
+
+    num_neighbours = max(1, num_neighbours)
+
+    if num_neighbours >= n:
+        raise ValueError('num_neighbours is bigger than array length.')
+
+    dists = np.empty(n)
+    neighbours_ids = np.empty(n, dtype=int)
+
+    for i, z_vector in enumerate(z_vectors):
+        for k in range(2, num_neighbours + 2):
+            dist, index = tree.query(z_vector, k=k, p=2)
+            valid = (np.abs(index - i) > 0) & (dist > 0)
+
+            if np.count_nonzero(valid):
+                dists[i] = dist[valid][0]
+                neighbours_ids[i] = index[valid][0]
+                break
+
+            if k == (num_neighbours + 1):
+                raise Exception('Could not find any near neighbor with a '
+                                'nonzero distance.  Try increasing the '
+                                'value of num_neighbours.')
+
+    return np.squeeze(neighbours_ids), np.squeeze(dists)
+
+def make_lapunov_estimation(z_vectors, k=1, num_neighbours=1):
     '''
     Input:
         z_vectors - 2d array of size n x (n-m+1)
@@ -79,7 +129,7 @@ def make_lapunov_estimation(z_vectors, k=1):
     Description:
         Calculates estimation of lapunov parameter
     '''
-    neighbours_ids, norms = find_neighbours(z_vectors)
+    neighbours_ids, norms = find_neighbours(z_vectors, num_neighbours=num_neighbours)
     estimations = []
     print("making lapunov estimation")
     for i in range(len(z_vectors)):
@@ -89,7 +139,7 @@ def make_lapunov_estimation(z_vectors, k=1):
     print()
     return np.mean(estimations)
 
-def rosenstein_method(time_series, z_vector_size):
+def rosenstein_method(time_series, z_vector_size, num_neighbours=1):
     z_vectors = make_z_vectors(time_series, z_vector_size)
-    lapunov = make_lapunov_estimation(z_vectors)
+    lapunov = make_lapunov_estimation(z_vectors, num_neighbours=num_neighbours)
     return lapunov
